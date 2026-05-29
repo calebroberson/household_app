@@ -23,22 +23,10 @@ workflows:
             --create
           keychain add-certificates
           xcode-project use-profiles
-      - name: Flutter build iOS
-        script: flutter build ios --release --no-codesign
-      - name: Package IPA
-        script: |
-          xcodebuild -workspace "$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
-            -sdk iphoneos \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/Runner.xcarchive" \
-            archive
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/Runner.xcarchive" \
-            -exportOptionsPlist /Users/builder/export_options.plist \
-            -exportPath "$CM_BUILD_DIR/ipa"
+      - name: Build IPA
+        script: flutter build ipa --release
     artifacts:
-      - $CM_BUILD_DIR/ipa/*.ipa
+      - build/ios/ipa/*.ipa
   android-workflow:
     name: Android Workflow
     max_build_duration: 60
