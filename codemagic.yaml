@@ -23,8 +23,10 @@ workflows:
             --create
           keychain add-certificates
           xcode-project use-profiles
-      - name: Build IPA
-        script: flutter build ipa --release
+      - name: Flutter build iOS
+        script: flutter build ios --release --no-codesign
+      - name: Package IPA
+        script: xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
     artifacts:
       - build/ios/ipa/*.ipa
   android-workflow:
