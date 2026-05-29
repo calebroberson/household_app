@@ -23,8 +23,8 @@ workflows:
           xcode-project use-profiles
       - name: Build iOS
         script: |
-          xcode-project build-ipa \
-            --workspace ios/Runner.xcworkspace \
+          cd ios && xcode-project build-ipa \
+            --workspace Runner.xcworkspace \
             --scheme Runner \
             --config Release
     artifacts:
