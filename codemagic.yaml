@@ -23,10 +23,10 @@ workflows:
           xcode-project use-profiles
       - name: Build iOS
         script: |
-          flutter build ios --release --no-codesign
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
-            --scheme Runner
+            --scheme Runner \
+            --config Release
     artifacts:
       - build/ios/ipa/*.ipa
   android-workflow:
