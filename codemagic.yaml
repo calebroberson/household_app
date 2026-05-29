@@ -20,12 +20,10 @@ workflows:
           keychain initialize
           app-store-connect fetch-signing-files $BUNDLE_ID \
             --type IOS_APP_STORE \
-            --create \
-            --verbose
-          echo "--- Profiles downloaded ---"
-          ls ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "No profiles directory"
+            --certificate-key=@env:CM_CERTIFICATE_PRIVATE_KEY \
+            --create
           keychain add-certificates
-          xcode-project use-profiles --verbose
+          xcode-project use-profiles
       - name: Flutter build iOS
         script: flutter build ios --release --no-codesign
       - name: Package IPA
