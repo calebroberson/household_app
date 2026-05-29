@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     environment:
       flutter: stable
-      xcode: latest
+      xcode: 16
       cocoapods: default
       groups:
         - ios_credentials
@@ -20,9 +20,12 @@ workflows:
           keychain initialize
           app-store-connect fetch-signing-files $BUNDLE_ID \
             --type IOS_APP_STORE \
-            --create
+            --create \
+            --verbose
+          echo "--- Profiles downloaded ---"
+          ls ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "No profiles directory"
           keychain add-certificates
-          xcode-project use-profiles
+          xcode-project use-profiles --verbose
       - name: Flutter build iOS
         script: flutter build ios --release --no-codesign
       - name: Package IPA
