@@ -10,6 +10,8 @@ workflows:
         - ios_credentials
       vars:
         BUNDLE_ID: com.calebroberson.householdapp
+        XCODE_WORKSPACE: ios/Runner.xcworkspace
+        XCODE_SCHEME: Runner
     scripts:
       - name: Get Flutter packages
         script: flutter packages pub get
@@ -21,14 +23,22 @@ workflows:
             --create
           keychain add-certificates
           xcode-project use-profiles
-      - name: Build iOS
+      - name: Flutter build iOS
+        script: flutter build ios --release --no-codesign
+      - name: Package IPA
         script: |
-          cd ios && xcode-project build-ipa \
-            --workspace Runner.xcworkspace \
-            --scheme Runner \
-            --config Release
+          xcodebuild -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/Runner.xcarchive" \
+            archive
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/Runner.xcarchive" \
+            -exportOptionsPlist /Users/builder/export_options.plist \
+            -exportPath "$CM_BUILD_DIR/ipa"
     artifacts:
-      - build/ios/ipa/*.ipa
+      - $CM_BUILD_DIR/ipa/*.ipa
   android-workflow:
     name: Android Workflow
     max_build_duration: 60
