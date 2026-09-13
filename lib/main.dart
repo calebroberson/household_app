@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'screens/home_screen.dart';
+import 'screens/household_gate.dart';
 import 'screens/sign_in_screen.dart';
 
 Future<void> main() async {
@@ -37,7 +37,7 @@ class AuthGate extends StatelessWidget {
       builder: (context, snapshot) {
         final session = Supabase.instance.client.auth.currentSession;
         if (session != null) {
-          return const HomeScreen();
+          return const HouseholdGate();
         }
         return const SignInScreen();
       },
