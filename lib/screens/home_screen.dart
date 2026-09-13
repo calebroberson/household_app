@@ -39,16 +39,40 @@ class _HomeScreenState extends State<HomeScreen> {
     ).join();
   }
 
-  Future<void> _createInvite() async {
+  Future<String> _findOrCreateActiveInviteCode() async {
+    final rows = await Supabase.instance.client
+        .from('household_invites')
+        .select('code, expires_at, max_uses, use_count')
+        .eq('household_id', widget.householdId)
+        .order('created_at', ascending: false)
+        .limit(20);
+
+    final now = DateTime.now();
+    for (final row in rows) {
+      final expiresAt = row['expires_at'] as String?;
+      final notExpired =
+          expiresAt == null || DateTime.parse(expiresAt).isAfter(now);
+      final usesLeft = (row['use_count'] as int) < (row['max_uses'] as int);
+      if (notExpired && usesLeft) {
+        return row['code'] as String;
+      }
+    }
+
     final code = _generateInviteCode();
     final userId = Supabase.instance.client.auth.currentUser!.id;
+    await Supabase.instance.client.from('household_invites').insert({
+      'household_id': widget.householdId,
+      'code': code,
+      'created_by': userId,
+      'expires_at': now.add(const Duration(days: 7)).toIso8601String(),
+      'max_uses': 10,
+    });
+    return code;
+  }
 
+  Future<void> _createInvite() async {
     try {
-      await Supabase.instance.client.from('household_invites').insert({
-        'household_id': widget.householdId,
-        'code': code,
-        'created_by': userId,
-      });
+      final code = await _findOrCreateActiveInviteCode();
 
       if (!mounted) return;
       showCupertinoDialog(
