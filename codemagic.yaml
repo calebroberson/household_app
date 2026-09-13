@@ -24,8 +24,14 @@ workflows:
             --create
           keychain add-certificates
           xcode-project use-profiles
+      - name: Set build number
+        script: |
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" || echo 0)
+          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          echo "Using build number $NEW_BUILD_NUMBER"
+          echo "BUILD_NUMBER=$NEW_BUILD_NUMBER" >> $CM_ENV
       - name: Flutter build iOS
-        script: flutter build ios --release --no-codesign
+        script: flutter build ios --release --no-codesign --build-number=$BUILD_NUMBER
       - name: Package IPA
         script: xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
     artifacts:
