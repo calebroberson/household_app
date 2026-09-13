@@ -22,7 +22,7 @@
 - Follow effective Dart naming conventions
 
 ## Supabase
-- URL: (add your Supabase project URL here)
+- URL: https://bgwzxmgrjzisyifnspyl.supabase.co
 - Tables: users, chores, households, household_members
 - Auth: Apple Sign In via Supabase Auth
 - Realtime: subscribe to chores table filtered by household_id
