@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'create_or_join_household_screen.dart';
-import 'home_screen.dart';
+import 'main_tab_scaffold.dart';
 
 class HouseholdGate extends StatefulWidget {
   const HouseholdGate({super.key});
@@ -52,7 +52,7 @@ class _HouseholdGateState extends State<HouseholdGate> {
         if (householdId == null) {
           return CreateOrJoinHouseholdScreen(onSuccess: _refresh);
         }
-        return HomeScreen(householdId: householdId);
+        return MainTabScaffold(householdId: householdId);
       },
     );
   }
