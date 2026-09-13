@@ -36,6 +36,8 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
+        beta_groups:
+          - Internal
   android-workflow:
     name: Android Workflow
     max_build_duration: 60
