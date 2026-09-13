@@ -11,27 +11,19 @@ class ListsScreen extends StatefulWidget {
 }
 
 class _ListsScreenState extends State<ListsScreen> {
-  String? _listId;
-  List<Map<String, dynamic>> _items = [];
-  bool _isLoading = true;
+  late Future<String> _listIdFuture;
   final _itemController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _listIdFuture = _fetchOrCreateDefaultList();
   }
 
   @override
   void dispose() {
     _itemController.dispose();
     super.dispose();
-  }
-
-  Future<void> _initialize() async {
-    final listId = await _fetchOrCreateDefaultList();
-    setState(() => _listId = listId);
-    await _refreshItems();
   }
 
   Future<String> _fetchOrCreateDefaultList() async {
@@ -56,41 +48,33 @@ class _ListsScreenState extends State<ListsScreen> {
     return created['id'] as String;
   }
 
-  Future<void> _refreshItems() async {
-    if (_listId == null) return;
-    final rows = await Supabase.instance.client
-        .from('list_items')
-        .select('id, title, checked')
-        .eq('list_id', _listId!)
-        .order('created_at');
-
-    setState(() {
-      _items = List<Map<String, dynamic>>.from(rows);
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _addItem() async {
+  Future<void> _addItem(String listId) async {
     final title = _itemController.text.trim();
-    if (title.isEmpty || _listId == null) return;
+    if (title.isEmpty) return;
 
     final userId = Supabase.instance.client.auth.currentUser!.id;
     await Supabase.instance.client.from('list_items').insert({
-      'list_id': _listId,
+      'list_id': listId,
       'household_id': widget.householdId,
       'title': title,
       'added_by': userId,
     });
 
     _itemController.clear();
-    await _refreshItems();
   }
 
   Future<void> _toggleChecked(String itemId, bool newValue) async {
     await Supabase.instance.client
         .from('list_items')
         .update({'checked': newValue}).eq('id', itemId);
-    await _refreshItems();
+  }
+
+  Future<void> _clearChecked(String listId) async {
+    await Supabase.instance.client
+        .from('list_items')
+        .delete()
+        .eq('list_id', listId)
+        .eq('checked', true);
   }
 
   @override
@@ -98,63 +82,132 @@ class _ListsScreenState extends State<ListsScreen> {
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(middle: Text('Groceries')),
       child: SafeArea(
-        child: _isLoading
-            ? const Center(child: CupertinoActivityIndicator())
-            : Column(
+        child: FutureBuilder<String>(
+          future: _listIdFuture,
+          builder: (context, listSnapshot) {
+            if (listSnapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CupertinoActivityIndicator());
+            }
+            if (listSnapshot.hasError) {
+              return const Center(child: Text('Could not load list.'));
+            }
+
+            final listId = listSnapshot.data!;
+            return _ListItemsBody(
+              listId: listId,
+              itemController: _itemController,
+              onAdd: () => _addItem(listId),
+              onToggle: _toggleChecked,
+              onClearChecked: () => _clearChecked(listId),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ListItemsBody extends StatelessWidget {
+  final String listId;
+  final TextEditingController itemController;
+  final VoidCallback onAdd;
+  final void Function(String itemId, bool newValue) onToggle;
+  final VoidCallback onClearChecked;
+
+  const _ListItemsBody({
+    required this.listId,
+    required this.itemController,
+    required this.onAdd,
+    required this.onToggle,
+    required this.onClearChecked,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final itemsStream = Supabase.instance.client
+        .from('list_items')
+        .stream(primaryKey: ['id'])
+        .eq('list_id', listId)
+        .order('created_at');
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: CupertinoTextField(
+                  controller: itemController,
+                  placeholder: 'Add an item',
+                  padding: const EdgeInsets.all(12),
+                  onSubmitted: (_) => onAdd(),
+                ),
+              ),
+              CupertinoButton(
+                onPressed: onAdd,
+                child: const Icon(CupertinoIcons.add_circled_solid),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: itemsStream,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CupertinoActivityIndicator());
+              }
+
+              final items = snapshot.data!;
+              if (items.isEmpty) {
+                return const Center(child: Text('No items yet.'));
+              }
+
+              final hasChecked = items.any((item) => item['checked'] as bool);
+
+              return Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: CupertinoTextField(
-                            controller: _itemController,
-                            placeholder: 'Add an item',
-                            padding: const EdgeInsets.all(12),
-                            onSubmitted: (_) => _addItem(),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        final checked = item['checked'] as bool;
+                        return CupertinoListTile(
+                          title: Text(
+                            item['title'] as String,
+                            style: checked
+                                ? const TextStyle(
+                                    decoration: TextDecoration.lineThrough,
+                                    color: CupertinoColors.secondaryLabel,
+                                  )
+                                : null,
                           ),
-                        ),
-                        CupertinoButton(
-                          onPressed: _addItem,
-                          child: const Icon(CupertinoIcons.add_circled_solid),
-                        ),
-                      ],
+                          leading: GestureDetector(
+                            onTap: () =>
+                                onToggle(item['id'] as String, !checked),
+                            child: Icon(
+                              checked
+                                  ? CupertinoIcons.checkmark_circle_fill
+                                  : CupertinoIcons.circle,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                  Expanded(
-                    child: _items.isEmpty
-                        ? const Center(child: Text('No items yet.'))
-                        : ListView.builder(
-                            itemCount: _items.length,
-                            itemBuilder: (context, index) {
-                              final item = _items[index];
-                              final checked = item['checked'] as bool;
-                              return CupertinoListTile(
-                                title: Text(
-                                  item['title'] as String,
-                                  style: checked
-                                      ? const TextStyle(
-                                          decoration: TextDecoration.lineThrough,
-                                          color: CupertinoColors.secondaryLabel,
-                                        )
-                                      : null,
-                                ),
-                                leading: GestureDetector(
-                                  onTap: () =>
-                                      _toggleChecked(item['id'] as String, !checked),
-                                  child: Icon(
-                                    checked
-                                        ? CupertinoIcons.checkmark_circle_fill
-                                        : CupertinoIcons.circle,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
+                  if (hasChecked)
+                    CupertinoButton(
+                      onPressed: onClearChecked,
+                      child: const Text('Clear Checked'),
+                    ),
                 ],
-              ),
-      ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
