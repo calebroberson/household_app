@@ -10,6 +10,7 @@ workflows:
         - ios_credentials
       vars:
         BUNDLE_ID: com.calebroberson.householdapp
+        APP_APPLE_ID: "6811686297"
         XCODE_WORKSPACE: ios/Runner.xcworkspace
         XCODE_SCHEME: Runner
     scripts:
@@ -26,7 +27,11 @@ workflows:
           xcode-project use-profiles
       - name: Set build number
         script: |
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" || echo 0)
+          set -o pipefail
+          if ! LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_APPLE_ID" --platform IOS); then
+            echo "No existing TestFlight build found for this app; starting from build number 0."
+            LATEST_BUILD_NUMBER=0
+          fi
           NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
           echo "Using build number $NEW_BUILD_NUMBER"
           echo "BUILD_NUMBER=$NEW_BUILD_NUMBER" >> $CM_ENV
