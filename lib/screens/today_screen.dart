@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/occurrence_generator.dart';
+import '../widgets/area_grouped_chore_list.dart';
 import 'chore_form_screen.dart';
 import 'chore_list_screen.dart';
 
@@ -121,85 +122,6 @@ class _TodayScreenState extends State<TodayScreen> {
     await _refreshOccurrences();
   }
 
-  Future<void> _complete(String occurrenceId) async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
-    await Supabase.instance.client.from('chore_occurrences').update({
-      'completed_at': DateTime.now().toUtc().toIso8601String(),
-      'completed_by': userId,
-    }).eq('id', occurrenceId);
-    await _refreshOccurrences();
-  }
-
-  Future<void> _skip(String occurrenceId) async {
-    await Supabase.instance.client
-        .from('chore_occurrences')
-        .update({'skipped': true}).eq('id', occurrenceId);
-    await _refreshOccurrences();
-  }
-
-  Future<void> _reassign(String occurrenceId) async {
-    final result = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: const Text('Reassign to'),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(context, ''),
-            child: const Text('Anyone'),
-          ),
-          ..._memberNames.entries.map((entry) => CupertinoActionSheetAction(
-                onPressed: () => Navigator.pop(context, entry.key),
-                child: Text(entry.value),
-              )),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-      ),
-    );
-
-    if (result == null) return;
-
-    final newAssignee = result.isEmpty ? null : result;
-    await Supabase.instance.client
-        .from('chore_occurrences')
-        .update({'assigned_to': newAssignee}).eq('id', occurrenceId);
-    await _refreshOccurrences();
-  }
-
-  Future<void> _showActionsFor(String occurrenceId, String choreTitle) async {
-    final action = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(choreTitle),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(context, 'reassign'),
-            child: const Text('Reassign'),
-          ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(context, 'skip'),
-            child: const Text('Skip Today'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-      ),
-    );
-
-    if (action == 'reassign') {
-      await _reassign(occurrenceId);
-    } else if (action == 'skip') {
-      await _skip(occurrenceId);
-    }
-  }
-
   Future<void> _showAreaFilter() async {
     final areas = _areasById.values.toList()
       ..sort((a, b) =>
@@ -229,75 +151,6 @@ class _TodayScreenState extends State<TodayScreen> {
 
     if (selected == null) return;
     setState(() => _areaFilter = selected.isEmpty ? null : selected);
-  }
-
-  List<Widget> _buildAreaGroupedChildren(List<Map<String, dynamic>> rows) {
-    final byArea = <String?, List<Map<String, dynamic>>>{};
-    for (final row in rows) {
-      final areaId = row['area_id'] as String?;
-      byArea.putIfAbsent(areaId, () => []).add(row);
-    }
-
-    final areaKeys = byArea.keys.toList()
-      ..sort((a, b) {
-        if (a == null) return 1;
-        if (b == null) return -1;
-        final aOrder = _areasById[a]?['sort_order'] as int? ?? 0;
-        final bOrder = _areasById[b]?['sort_order'] as int? ?? 0;
-        return aOrder.compareTo(bOrder);
-      });
-
-    final children = <Widget>[];
-    for (final areaKey in areaKeys) {
-      final area = areaKey == null ? null : _areasById[areaKey];
-      final areaName = area?['name'] as String? ?? 'General';
-      final isPrivate = area?['visibility'] == 'private';
-
-      children.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                areaName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: CupertinoColors.secondaryLabel,
-                ),
-              ),
-              if (isPrivate) ...[
-                const SizedBox(width: 4),
-                const Icon(
-                  CupertinoIcons.lock_fill,
-                  size: 12,
-                  color: CupertinoColors.secondaryLabel,
-                ),
-              ],
-            ],
-          ),
-        ),
-      );
-
-      for (final row in byArea[areaKey]!) {
-        final choreId = row['chore_id'] as String;
-        final occurrenceId = row['id'] as String;
-        final title = _choreTitles[choreId] ?? 'Chore';
-        children.add(
-          GestureDetector(
-            onLongPress: () => _showActionsFor(occurrenceId, title),
-            child: CupertinoListTile(
-              title: Text(title),
-              leading: const Icon(CupertinoIcons.circle),
-              onTap: () => _complete(occurrenceId),
-            ),
-          ),
-        );
-      }
-    }
-
-    return children;
   }
 
   @override
@@ -416,7 +269,14 @@ class _TodayScreenState extends State<TodayScreen> {
                     final rows = grouped[key]!;
                     return CupertinoListSection.insetGrouped(
                       header: Text(label),
-                      children: _buildAreaGroupedChildren(rows),
+                      children: buildAreaGroupedChildren(
+                        context: context,
+                        rows: rows,
+                        areasById: _areasById,
+                        choreTitles: _choreTitles,
+                        memberNames: _memberNames,
+                        householdId: widget.householdId,
+                      ),
                     );
                   }).toList(),
                 );
