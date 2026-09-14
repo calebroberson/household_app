@@ -27,8 +27,11 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
   int _monthlyDayOfMonth = 1;
   String _assignmentStrategy = 'anyone';
   String? _fixedAssigneeId;
+  String? _selectedAreaId;
   List<Map<String, dynamic>> _members = [];
+  List<Map<String, dynamic>> _areas = [];
   bool _isLoadingMembers = true;
+  bool _isLoadingAreas = true;
   bool _isSubmitting = false;
   String? _errorMessage;
 
@@ -51,6 +54,7 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
       _loadFromExistingChore(widget.existingChore!);
     }
     _loadMembers();
+    _loadAreas();
   }
 
   void _loadFromExistingChore(Map<String, dynamic> chore) {
@@ -70,6 +74,7 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
 
     _assignmentStrategy = chore['assignment_strategy'] as String;
     _fixedAssigneeId = chore['fixed_assignee'] as String?;
+    _selectedAreaId = chore['area_id'] as String?;
   }
 
   @override
@@ -110,6 +115,37 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
     });
   }
 
+  Future<void> _loadAreas() async {
+    final rows = await Supabase.instance.client
+        .from('areas')
+        .select('id, name, visibility, owner_id, archived_at')
+        .eq('household_id', widget.householdId)
+        .order('sort_order');
+
+    setState(() {
+      _areas = rows.where((a) => a['archived_at'] == null).toList();
+      _isLoadingAreas = false;
+    });
+  }
+
+  Map<String, dynamic>? _findArea(String? id) {
+    if (id == null) return null;
+    for (final area in _areas) {
+      if (area['id'] == id) return area;
+    }
+    return null;
+  }
+
+  String _ownerNameFor(Map<String, dynamic> area) {
+    final ownerId = area['owner_id'] as String?;
+    for (final member in _members) {
+      if (member['user_id'] == ownerId) {
+        return member['display_name'] as String;
+      }
+    }
+    return 'Owner';
+  }
+
   Map<String, dynamic> _buildRecurrenceRule() {
     switch (_recurrenceType) {
       case 'daily':
@@ -142,7 +178,14 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
       setState(() => _errorMessage = 'Select at least one day.');
       return;
     }
-    if (_assignmentStrategy == 'fixed' && _fixedAssigneeId == null) {
+
+    final selectedArea = _findArea(_selectedAreaId);
+    final isPrivateAreaSelected =
+        selectedArea != null && selectedArea['visibility'] == 'private';
+
+    if (!isPrivateAreaSelected &&
+        _assignmentStrategy == 'fixed' &&
+        _fixedAssigneeId == null) {
       setState(() => _errorMessage = 'Choose who this is assigned to.');
       return;
     }
@@ -154,15 +197,22 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
 
     try {
       final recurrenceRule = _buildRecurrenceRule();
+      final effectiveStrategy =
+          isPrivateAreaSelected ? 'fixed' : _assignmentStrategy;
+      final effectiveFixedAssignee = isPrivateAreaSelected
+          ? selectedArea['owner_id'] as String?
+          : _fixedAssigneeId;
+
       final data = <String, dynamic>{
         'title': title,
         'recurrence_rule': recurrenceRule,
-        'assignment_strategy': _assignmentStrategy,
+        'assignment_strategy': effectiveStrategy,
         'fixed_assignee':
-            _assignmentStrategy == 'fixed' ? _fixedAssigneeId : null,
-        'assignee_order': _assignmentStrategy == 'rotate'
+            effectiveStrategy == 'fixed' ? effectiveFixedAssignee : null,
+        'assignee_order': effectiveStrategy == 'rotate'
             ? _members.map((m) => m['user_id'] as String).toList()
             : null,
+        'area_id': _selectedAreaId,
       };
 
       if (_isEditing) {
@@ -199,7 +249,7 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
         ),
       ),
       child: SafeArea(
-        child: _isLoadingMembers
+        child: (_isLoadingMembers || _isLoadingAreas)
             ? const Center(child: CupertinoActivityIndicator())
             : ListView(
                 padding: const EdgeInsets.all(16),
@@ -311,44 +361,87 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
                     ),
                   ],
                   const SizedBox(height: 24),
+                  const Text('Area',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  CupertinoListTile(
+                    title: const Text('None (General)'),
+                    trailing: _selectedAreaId == null
+                        ? const Icon(CupertinoIcons.checkmark_alt)
+                        : null,
+                    onTap: () => setState(() => _selectedAreaId = null),
+                  ),
+                  ..._areas.map((area) {
+                    final selected = _selectedAreaId == area['id'];
+                    final isPrivate = area['visibility'] == 'private';
+                    return CupertinoListTile(
+                      title: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(area['name'] as String),
+                          if (isPrivate) ...[
+                            const SizedBox(width: 6),
+                            const Icon(CupertinoIcons.lock_fill, size: 14),
+                          ],
+                        ],
+                      ),
+                      trailing: selected
+                          ? const Icon(CupertinoIcons.checkmark_alt)
+                          : null,
+                      onTap: () =>
+                          setState(() => _selectedAreaId = area['id'] as String),
+                    );
+                  }),
+                  const SizedBox(height: 24),
                   const Text('Assign to',
                       style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  CupertinoSlidingSegmentedControl<String>(
-                    groupValue: _assignmentStrategy,
-                    children: const {
-                      'anyone': Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('Anyone'),
-                      ),
-                      'rotate': Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('Rotate'),
-                      ),
-                      'fixed': Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('Fixed'),
-                      ),
-                    },
-                    onValueChanged: (value) {
-                      if (value != null) {
-                        setState(() => _assignmentStrategy = value);
-                      }
-                    },
-                  ),
-                  if (_assignmentStrategy == 'fixed') ...[
-                    const SizedBox(height: 12),
-                    ..._members.map((member) {
-                      final selected = _fixedAssigneeId == member['user_id'];
-                      return CupertinoListTile(
-                        title: Text(member['display_name'] as String),
-                        trailing: selected
-                            ? const Icon(CupertinoIcons.checkmark_alt)
-                            : null,
-                        onTap: () => setState(() =>
-                            _fixedAssigneeId = member['user_id'] as String),
-                      );
-                    }),
+                  if (_findArea(_selectedAreaId) != null &&
+                      _findArea(_selectedAreaId)!['visibility'] ==
+                          'private') ...[
+                    Text(
+                      '${_ownerNameFor(_findArea(_selectedAreaId)!)} (private area)',
+                      style:
+                          const TextStyle(color: CupertinoColors.secondaryLabel),
+                    ),
+                  ] else ...[
+                    CupertinoSlidingSegmentedControl<String>(
+                      groupValue: _assignmentStrategy,
+                      children: const {
+                        'anyone': Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('Anyone'),
+                        ),
+                        'rotate': Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('Rotate'),
+                        ),
+                        'fixed': Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('Fixed'),
+                        ),
+                      },
+                      onValueChanged: (value) {
+                        if (value != null) {
+                          setState(() => _assignmentStrategy = value);
+                        }
+                      },
+                    ),
+                    if (_assignmentStrategy == 'fixed') ...[
+                      const SizedBox(height: 12),
+                      ..._members.map((member) {
+                        final selected =
+                            _fixedAssigneeId == member['user_id'];
+                        return CupertinoListTile(
+                          title: Text(member['display_name'] as String),
+                          trailing: selected
+                              ? const Icon(CupertinoIcons.checkmark_alt)
+                              : null,
+                          onTap: () => setState(() =>
+                              _fixedAssigneeId = member['user_id'] as String),
+                        );
+                      }),
+                    ],
                   ],
                   if (_errorMessage != null) ...[
                     const SizedBox(height: 16),

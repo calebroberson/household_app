@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'area_list_screen.dart';
+
 class HomeScreen extends StatefulWidget {
   final String householdId;
   final VoidCallback onHouseholdChanged;
@@ -228,6 +230,16 @@ class _HomeScreenState extends State<HomeScreen> {
             CupertinoButton.filled(
               onPressed: _createInvite,
               child: const Text('Invite Someone'),
+            ),
+            const SizedBox(height: 12),
+            CupertinoButton(
+              onPressed: () => Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (context) =>
+                      AreaListScreen(householdId: widget.householdId),
+                ),
+              ),
+              child: const Text('Manage Areas'),
             ),
             const SizedBox(height: 32),
             const Text(
