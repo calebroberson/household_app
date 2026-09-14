@@ -31,10 +31,14 @@
 - URL: https://bgwzxmgrjzisyifnspyl.supabase.co
 - Tables: profiles, households, household_members, household_invites, chores, chore_occurrences, lists, list_items
 - `chores` = recurring templates (recurrence_rule, assignment_strategy); `chore_occurrences` = individual due instances — never store due dates directly on `chores`
+- `recurrence_rule` JSON shape (v1, daily + weekly-on-days only): `{"type":"daily"}` or `{"type":"weekly","days":[1..7]}` (ISO weekday, 1=Monday). "Every N weeks" / "monthly" not implemented yet.
 - Household create/join go through RPCs (`create_household`, `redeem_invite`), not direct table inserts — households/household_members have no client-side INSERT policy by design
-- RLS: all household-scoped tables use the `is_household_member(household_id)` security-definer function, not inline subqueries (avoids recursive RLS bug on household_members)
+- RLS: all household-scoped tables use the `is_household_member(household_id)` security-definer function, not inline subqueries (avoids recursive RLS bug on household_members). Cross-user profile visibility uses the same pattern via `shares_household_with(target_user_id)` — `profiles` SELECT is otherwise self-only, so any feature needing another member's display name (assignee pickers, "assigned to" labels) needs this policy, already added.
+- `household_members` and `profiles` have **no direct foreign key to each other** (both separately reference `auth.users`) — PostgREST embedded selects like `household_members.select('user_id, profiles(display_name))')` will NOT resolve. Always do two plain queries (member user_ids, then `profiles.select(...).inFilter('id', userIds)`) and join manually in Dart. Hit this in the chores work; cost real review time to catch since it's a runtime failure `flutter analyze` can't see.
 - Auth: Apple Sign In via Supabase Auth (P0). Email magic link deferred.
-- Realtime: subscribe to list_items and chore_occurrences filtered by household_id
+- Realtime: subscribe to list_items, lists, and chore_occurrences filtered by household_id
+- Any `timestamptz` value built client-side must be `DateTime.now().toUtc().toIso8601String()`, never without `.toUtc()` — a bare local-time ISO string gets interpreted by Postgres as UTC, silently skewing the stored value by the device's UTC offset.
+- Occurrence generation (creating the next `chore_occurrences` row, collapsing overdue ones) lives client-side in `lib/services/occurrence_generator.dart`, not a Postgres RPC — deliberate choice for easier iteration/debugging over eliminating a rare, harmless race condition. Revisit only if a server-side scheduled job (e.g. the deferred push digest) needs the same logic. Algorithm: at most one open (not completed, not skipped) occurrence per chore ever; a resolved occurrence's replacement is due on the next qualifying date *after today* (not after the old due date), so late completions never create a catch-up backlog.
 - Push notifications (APNs) and Sentry crash reporting deferred until core chores/lists loop works end-to-end
 
 ## iOS testing workflow
