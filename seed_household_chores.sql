@@ -1,4 +1,4 @@
--- Seeds 99 chores for Caleb (+ Matthew once he joins) into the 8 areas
+-- Seeds 97 chores for Caleb (+ Matthew once he joins) into the 8 areas
 -- that already exist in the household (7 were created earlier through
 -- the app's own Area UI, with slightly different names/casing than
 -- this script originally used -- "Half-Bath" not "Half Bath", "Entry
@@ -54,14 +54,17 @@ begin
   insert into areas (household_id, name, sort_order, visibility) values
     (v_household_id, 'Home', 7, 'shared') returning id into v_home_id;
 
-  -- Kitchen (29 chores)
+  -- Kitchen (27 chores) -- "Run dishwasher" and "Empty dishwasher" are
+  -- deliberately excluded: the dishwasher only runs when it's actually
+  -- full, so neither is a real fixed-cadence chore, and there's no
+  -- chore-triggering mechanism (one chore's completion scheduling
+  -- another) to model "empty it the morning after it's run" -- decided
+  -- to drop both from tracking entirely rather than build that.
   insert into chores (household_id, area_id, title, recurrence_rule, assignment_strategy, assignee_order, fixed_assignee, created_by) values
     (v_household_id, v_kitchen_id, 'Wipe counters and backsplash', '{"type":"daily"}', 'anyone', null, null, v_caleb_id),
     (v_household_id, v_kitchen_id, 'Wipe stovetop', '{"type":"daily"}', 'anyone', null, null, v_caleb_id),
     (v_household_id, v_kitchen_id, 'Wipe sink, faucet, and clear drain catch', '{"type":"daily"}', 'anyone', null, null, v_caleb_id),
     (v_household_id, v_kitchen_id, 'Sweep floor', '{"type":"daily"}', 'anyone', null, null, v_caleb_id),
-    (v_household_id, v_kitchen_id, 'Run dishwasher / hand-wash what''s left', '{"type":"daily"}', 'anyone', null, null, v_caleb_id),
-    (v_household_id, v_kitchen_id, 'Empty dishwasher', '{"type":"daily"}', 'anyone', null, null, v_caleb_id),
     (v_household_id, v_kitchen_id, 'Take out kitchen trash', '{"type":"weekly","days":[1,4]}', 'rotate', v_rotate_order, null, v_caleb_id),
     (v_household_id, v_kitchen_id, 'Take out recycling', '{"type":"weekly","days":[7]}', 'rotate', v_rotate_order, null, v_caleb_id),
     (v_household_id, v_kitchen_id, 'Wipe cabinet fronts and handles', '{"type":"monthly","day_of_month":1}', 'rotate', v_rotate_order, null, v_caleb_id),
@@ -177,7 +180,7 @@ begin
     (v_household_id, v_home_id, 'Replace HVAC filter', ('{"type":"every_n_months","n":3,"day_of_month":1,"anchor":"' || v_today || '"}')::jsonb, 'rotate', v_rotate_order, null, v_caleb_id),
     (v_household_id, v_home_id, 'Replace detector batteries', ('{"type":"every_n_months","n":12,"day_of_month":1,"anchor":"' || v_today || '"}')::jsonb, 'anyone', null, null, v_caleb_id);
 
-  raise notice 'Seeded 8 areas and 99 chores for household %', v_household_id;
+  raise notice 'Seeded 8 areas and 97 chores for household %', v_household_id;
 end $$;
 
 -- ============================================================
