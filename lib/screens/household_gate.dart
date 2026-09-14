@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/push_registration.dart';
 import 'create_or_join_household_screen.dart';
 import 'main_tab_scaffold.dart';
 
@@ -13,6 +14,7 @@ class HouseholdGate extends StatefulWidget {
 
 class _HouseholdGateState extends State<HouseholdGate> {
   late Future<String?> _householdIdFuture;
+  bool _pushRegistrationTriggered = false;
 
   @override
   void initState() {
@@ -75,6 +77,13 @@ class _HouseholdGateState extends State<HouseholdGate> {
         final householdId = snapshot.data;
         if (householdId == null) {
           return CreateOrJoinHouseholdScreen(onSuccess: _refresh);
+        }
+        if (!_pushRegistrationTriggered) {
+          _pushRegistrationTriggered = true;
+          PushRegistration.registerForPushNotifications(
+            context: context,
+            householdId: householdId,
+          );
         }
         return MainTabScaffold(
           householdId: householdId,
