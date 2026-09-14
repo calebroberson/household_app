@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/household_gate.dart';
@@ -12,7 +13,13 @@ Future<void> main() async {
     publishableKey: 'sb_publishable_f3EToKpHPfOM4Cxy_rgnmA_bHfnKIp9',
   );
 
-  runApp(const HouseholdApp());
+  await SentryFlutter.init(
+    (options) {
+      options.dsn =
+          'https://1a3bb9e35df02e78b1a3384cf13f23e7@o4512082394349568.ingest.us.sentry.io/4512082400903168';
+    },
+    appRunner: () => runApp(const HouseholdApp()),
+  );
 }
 
 class HouseholdApp extends StatelessWidget {
