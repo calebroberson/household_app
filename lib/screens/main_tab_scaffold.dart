@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import 'calendar_screen.dart';
 import 'home_screen.dart';
 import 'lists_screen.dart';
 import 'today_screen.dart';
@@ -24,6 +25,10 @@ class MainTabScaffold extends StatelessWidget {
             label: 'Today',
           ),
           BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.calendar),
+            label: 'Calendar',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.list_bullet),
             label: 'Lists',
           ),
@@ -38,6 +43,8 @@ class MainTabScaffold extends StatelessWidget {
           case 0:
             return TodayScreen(householdId: householdId);
           case 1:
+            return CalendarScreen(householdId: householdId);
+          case 2:
             return ListsScreen(householdId: householdId);
           default:
             return HomeScreen(

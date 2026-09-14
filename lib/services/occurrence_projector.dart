@@ -37,12 +37,21 @@ class OccurrenceProjector {
   /// produced by OccurrenceGenerator). A chore whose real occurrence is
   /// already due after [through] projects to an empty list -- nothing to
   /// show beyond what's already visible as the real row itself.
+  ///
+  /// If the real occurrence is overdue (due date in the past), projection
+  /// starts from today rather than from that stale due date -- otherwise
+  /// an overdue chore would appear to "recur" many times between its old
+  /// due date and now, when really it's just stuck on one unresolved
+  /// cycle. Projecting from today is a deliberate planning assumption
+  /// ("if resolved around now, here's roughly what's next"), not a claim
+  /// about exactly when it'll actually be completed.
   static Map<String, List<DateTime>> projectForChores(
     List<Map<String, dynamic>> chores, {
     required Map<String, DateTime> realDueDates,
     required DateTime through,
   }) {
     final result = <String, List<DateTime>>{};
+    final today = OccurrenceGenerator.dateOnly(DateTime.now());
 
     for (final chore in chores) {
       final choreId = chore['id'] as String;
@@ -52,7 +61,8 @@ class OccurrenceProjector {
         continue;
       }
 
-      final projectFrom = realDue.add(const Duration(days: 1));
+      final baseline = realDue.isAfter(today) ? realDue : today;
+      final projectFrom = baseline.add(const Duration(days: 1));
       if (projectFrom.isAfter(through)) {
         result[choreId] = [];
         continue;
