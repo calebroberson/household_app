@@ -131,7 +131,12 @@ class _ChoreListScreenState extends State<ChoreListScreen> {
                     final rule =
                         chore['recurrence_rule'] as Map<String, dynamic>;
                     return CupertinoListTile(
-                      title: Text(chore['title'] as String),
+                      title: Text(
+                        chore['title'] as String,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
+                      ),
                       subtitle: Text(_recurrenceSummary(rule)),
                       trailing: const Icon(CupertinoIcons.chevron_forward),
                       onTap: () async {
