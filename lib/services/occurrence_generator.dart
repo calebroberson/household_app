@@ -3,14 +3,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Generates chore_occurrences from chore templates, keeping at most one
 /// open (not completed, not skipped) occurrence per chore at any time.
 class OccurrenceGenerator {
-  static DateTime _dateOnly(DateTime dt) =>
+  static DateTime dateOnly(DateTime dt) =>
       DateTime(dt.year, dt.month, dt.day);
 
   static DateTime _startOfWeek(DateTime d) =>
       d.subtract(Duration(days: d.weekday - 1));
 
   static String formatDate(DateTime dt) {
-    final d = _dateOnly(dt);
+    final d = dateOnly(dt);
     final month = d.month.toString().padLeft(2, '0');
     final day = d.day.toString().padLeft(2, '0');
     return '${d.year}-$month-$day';
@@ -21,7 +21,7 @@ class OccurrenceGenerator {
     Map<String, dynamic> recurrenceRule, {
     required DateTime searchFrom,
   }) {
-    final from = _dateOnly(searchFrom);
+    final from = dateOnly(searchFrom);
     final type = recurrenceRule['type'] as String;
 
     if (type == 'daily') {
@@ -42,7 +42,7 @@ class OccurrenceGenerator {
     if (type == 'every_n_weeks') {
       final n = recurrenceRule['n'] as int;
       final weekday = recurrenceRule['weekday'] as int;
-      final anchor = _dateOnly(DateTime.parse(recurrenceRule['anchor'] as String));
+      final anchor = dateOnly(DateTime.parse(recurrenceRule['anchor'] as String));
       final anchorWeekStart = _startOfWeek(anchor);
 
       for (var i = 0; i < n * 7; i++) {
@@ -80,7 +80,7 @@ class OccurrenceGenerator {
       final n = recurrenceRule['n'] as int;
       final dayOfMonth = recurrenceRule['day_of_month'] as int;
       final anchor =
-          _dateOnly(DateTime.parse(recurrenceRule['anchor'] as String));
+          dateOnly(DateTime.parse(recurrenceRule['anchor'] as String));
       final anchorMonthIndex = anchor.year * 12 + (anchor.month - 1);
 
       var candidateMonthIndex = from.year * 12 + (from.month - 1);
@@ -127,7 +127,7 @@ class OccurrenceGenerator {
         .order('due_date', ascending: false)
         .limit(1);
 
-    final today = _dateOnly(DateTime.now());
+    final today = dateOnly(DateTime.now());
     final recurrenceRule = chore['recurrence_rule'] as Map<String, dynamic>;
 
     final areaId = chore['area_id'] as String?;
