@@ -221,7 +221,10 @@ class _TodayScreenState extends State<TodayScreen> {
                 }
 
                 final today = OccurrenceGenerator.formatDate(DateTime.now());
-                final visible = snapshot.data!.where((row) {
+                final todayDateOnly =
+                    OccurrenceGenerator.dateOnly(DateTime.now());
+
+                final openRows = snapshot.data!.where((row) {
                   final dueDate = row['due_date'] as String;
                   final completed = row['completed_at'] != null;
                   final skipped = row['skipped'] as bool;
@@ -230,26 +233,43 @@ class _TodayScreenState extends State<TodayScreen> {
                       !skipped;
                 }).toList();
 
-                if (visible.isEmpty) {
+                // Chores resolved (completed or skipped) today -- kept
+                // visible instead of vanishing, so an accidental
+                // complete/skip has a row to tap-to-undo.
+                final resolvedTodayRows = snapshot.data!.where((row) {
+                  final resolvedAtRaw = (row['completed_at'] ??
+                      row['skipped_at']) as String?;
+                  if (resolvedAtRaw == null) return false;
+                  final resolvedDate = OccurrenceGenerator.dateOnly(
+                      DateTime.parse(resolvedAtRaw).toLocal());
+                  return resolvedDate == todayDateOnly;
+                }).toList();
+
+                if (openRows.isEmpty && resolvedTodayRows.isEmpty) {
                   if (_choreTitles.isEmpty) {
                     return _buildOnboarding();
                   }
                   return const Center(child: Text('Nothing due today.'));
                 }
 
-                final areaFiltered = _areaFilter == null
-                    ? visible
-                    : visible
+                final openAreaFiltered = _areaFilter == null
+                    ? openRows
+                    : openRows
+                        .where((row) => row['area_id'] == _areaFilter)
+                        .toList();
+                final resolvedAreaFiltered = _areaFilter == null
+                    ? resolvedTodayRows
+                    : resolvedTodayRows
                         .where((row) => row['area_id'] == _areaFilter)
                         .toList();
 
-                if (areaFiltered.isEmpty) {
+                if (openAreaFiltered.isEmpty && resolvedAreaFiltered.isEmpty) {
                   return const Center(
                       child: Text('Nothing due today in this area.'));
                 }
 
                 final grouped = <String?, List<Map<String, dynamic>>>{};
-                for (final row in areaFiltered) {
+                for (final row in openAreaFiltered) {
                   final assignedTo = row['assigned_to'] as String?;
                   grouped.putIfAbsent(assignedTo, () => []).add(row);
                 }
@@ -262,23 +282,37 @@ class _TodayScreenState extends State<TodayScreen> {
                   });
 
                 return ListView(
-                  children: groupKeys.map((key) {
-                    final label = key == null
-                        ? 'Anyone'
-                        : (_memberNames[key] ?? 'Household member');
-                    final rows = grouped[key]!;
-                    return CupertinoListSection.insetGrouped(
-                      header: Text(label),
-                      children: buildAreaGroupedChildren(
-                        context: context,
-                        rows: rows,
-                        areasById: _areasById,
-                        choreTitles: _choreTitles,
-                        memberNames: _memberNames,
-                        householdId: widget.householdId,
+                  children: [
+                    ...groupKeys.map((key) {
+                      final label = key == null
+                          ? 'Anyone'
+                          : (_memberNames[key] ?? 'Household member');
+                      final rows = grouped[key]!;
+                      return CupertinoListSection.insetGrouped(
+                        header: Text(label),
+                        children: buildAreaGroupedChildren(
+                          context: context,
+                          rows: rows,
+                          areasById: _areasById,
+                          choreTitles: _choreTitles,
+                          memberNames: _memberNames,
+                          householdId: widget.householdId,
+                        ),
+                      );
+                    }),
+                    if (resolvedAreaFiltered.isNotEmpty)
+                      CupertinoListSection.insetGrouped(
+                        header: const Text('Completed'),
+                        children: buildAreaGroupedChildren(
+                          context: context,
+                          rows: resolvedAreaFiltered,
+                          areasById: _areasById,
+                          choreTitles: _choreTitles,
+                          memberNames: _memberNames,
+                          householdId: widget.householdId,
+                        ),
                       ),
-                    );
-                  }).toList(),
+                  ],
                 );
               },
             );
