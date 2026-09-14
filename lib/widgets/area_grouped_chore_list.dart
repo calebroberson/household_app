@@ -102,7 +102,7 @@ class _ChoreRow extends StatelessWidget {
     final title = choreTitles[choreId] ?? 'Chore';
     final completed = row['completed_at'] != null;
     final skipped = row['skipped'] == true;
-    final isActionable = !completed && !skipped;
+    final isOpen = !completed && !skipped;
 
     Widget leadingIcon;
     TextStyle? titleStyle;
@@ -134,7 +134,7 @@ class _ChoreRow extends StatelessWidget {
     }
 
     return GestureDetector(
-      onLongPress: isActionable
+      onLongPress: isOpen
           ? () => ChoreActions.showActionsSheet(
                 context: context,
                 occurrenceId: occurrenceId,
@@ -144,13 +144,50 @@ class _ChoreRow extends StatelessWidget {
               )
           : null,
       child: CupertinoListTile(
-        title: Text(title, style: titleStyle),
-        subtitle: subtitle != null ? Text(subtitle) : null,
-        leading: leadingIcon,
-        onTap: isActionable
-            ? () => ChoreActions.complete(occurrenceId, householdId)
+        title: Text(
+          title,
+          style: titleStyle,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          softWrap: true,
+        ),
+        subtitle: subtitle != null
+            ? Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis)
             : null,
+        leading: leadingIcon,
+        onTap: isOpen
+            ? () => ChoreActions.complete(occurrenceId, householdId)
+            : () => _reopen(context, occurrenceId, householdId),
       ),
     );
+  }
+
+  Future<void> _reopen(
+    BuildContext context,
+    String occurrenceId,
+    String householdId,
+  ) async {
+    try {
+      await ChoreActions.reopen(occurrenceId, householdId);
+    } catch (error) {
+      if (!context.mounted) return;
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Can\'t Undo'),
+          content: Text(
+            error is StateError
+                ? error.message
+                : 'This chore could not be reopened.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

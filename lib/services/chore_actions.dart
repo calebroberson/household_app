@@ -17,9 +17,69 @@ class ChoreActions {
   }
 
   static Future<void> skip(String occurrenceId, String householdId) async {
-    await Supabase.instance.client
+    await Supabase.instance.client.from('chore_occurrences').update({
+      'skipped': true,
+      'skipped_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', occurrenceId);
+    await OccurrenceGenerator.ensureOccurrencesForHousehold(householdId);
+  }
+
+  /// Undoes a completed or skipped occurrence, restoring it to open.
+  ///
+  /// Refuses (throws a [StateError]) if the same chore has already been
+  /// resolved again more recently than [occurrenceId] -- undoing an older
+  /// resolution in that case would silently discard real, later history.
+  /// On success, also removes the single open occurrence
+  /// [OccurrenceGenerator] auto-generated right after [occurrenceId]
+  /// resolved, so the "at most one open occurrence per chore" invariant
+  /// holds again with [occurrenceId] itself as that one open occurrence.
+  static Future<void> reopen(String occurrenceId, String householdId) async {
+    final client = Supabase.instance.client;
+
+    final occurrence = await client
         .from('chore_occurrences')
-        .update({'skipped': true}).eq('id', occurrenceId);
+        .select('chore_id, completed_at, skipped_at')
+        .eq('id', occurrenceId)
+        .single();
+
+    final choreId = occurrence['chore_id'] as String;
+    final resolvedAtRaw =
+        (occurrence['completed_at'] ?? occurrence['skipped_at']) as String?;
+    if (resolvedAtRaw == null) return;
+    final resolvedAt = DateTime.parse(resolvedAtRaw);
+
+    final siblings = await client
+        .from('chore_occurrences')
+        .select('id, completed_at, skipped_at')
+        .eq('chore_id', choreId);
+
+    for (final sibling in siblings) {
+      if (sibling['id'] == occurrenceId) continue;
+      final siblingResolvedRaw =
+          (sibling['completed_at'] ?? sibling['skipped_at']) as String?;
+      if (siblingResolvedRaw == null) continue;
+      if (DateTime.parse(siblingResolvedRaw).isAfter(resolvedAt)) {
+        throw StateError(
+          'This chore has already been done again since -- can\'t undo.',
+        );
+      }
+    }
+
+    await client
+        .from('chore_occurrences')
+        .delete()
+        .eq('chore_id', choreId)
+        .isFilter('completed_at', null)
+        .eq('skipped', false)
+        .neq('id', occurrenceId);
+
+    await client.from('chore_occurrences').update({
+      'completed_at': null,
+      'completed_by': null,
+      'skipped': false,
+      'skipped_at': null,
+    }).eq('id', occurrenceId);
+
     await OccurrenceGenerator.ensureOccurrencesForHousehold(householdId);
   }
 
