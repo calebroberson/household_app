@@ -1,12 +1,18 @@
--- Seeds 8 areas and 99 chores for Caleb (+ Matthew once he joins).
+-- Seeds 99 chores for Caleb (+ Matthew once he joins) into the 8 areas
+-- that already exist in the household (7 were created earlier through
+-- the app's own Area UI, with slightly different names/casing than
+-- this script originally used -- "Half-Bath" not "Half Bath", "Entry
+-- Way" not "Entryway" -- so their real ids are hardcoded below instead
+-- of being (re)created here. Only "Home" didn't exist yet and is
+-- created by this script.
 -- Safe to run before Matthew has joined: rotate chores are seeded with
 -- a single-person rotation (just Caleb) until he's found. Once he
 -- joins, run the follow-up UPDATE at the bottom of this file to
 -- activate real alternation.
--- Not idempotent -- running it twice will duplicate everything (the
--- unique-name-per-household index on areas will stop duplicate AREAS,
--- but chores have no such constraint). Delete this file's rows first
--- if you need to re-run it.
+-- Not idempotent -- running it twice will duplicate every chore (no
+-- unique constraint on chores). Clear chores/chore_occurrences for
+-- this household first if you need to re-run it -- do NOT touch areas,
+-- they're already correct.
 
 do $$
 declare
@@ -14,13 +20,13 @@ declare
   v_caleb_id uuid := '3bf30ca6-ba9b-4a96-b8a7-b8232af3cdc5';
   v_matthew_id uuid;
   v_rotate_order uuid[];
-  v_kitchen_id uuid;
-  v_half_bath_id uuid;
-  v_living_room_id uuid;
-  v_stairs_id uuid;
-  v_entryway_id uuid;
-  v_calebs_room_id uuid;
-  v_calebs_bathroom_id uuid;
+  v_kitchen_id uuid := '4d8cd84a-30a9-4c24-9860-4f3e6b1f7138';
+  v_living_room_id uuid := '41713c24-9cd0-4767-bd8c-cf944f5c17e7';
+  v_half_bath_id uuid := '9fd4e4fc-03fd-4616-8f18-2b723aa1d03b';
+  v_stairs_id uuid := '80a73482-79f8-4bc8-bb5b-f0e61b46b4e4';
+  v_entryway_id uuid := 'cd0e3eee-cf1f-4b7b-a17a-cb3115c57c35';
+  v_calebs_room_id uuid := 'ee616591-cdc4-4863-a856-9dc0c9479487';
+  v_calebs_bathroom_id uuid := '890d0662-ac58-478f-b4d6-a5611355473e';
   v_home_id uuid;
   v_today text := to_char(current_date, 'YYYY-MM-DD');
 begin
@@ -43,21 +49,8 @@ begin
     raise notice 'Matthew has not joined yet -- seeding rotate chores as Caleb-only for now. Run the follow-up UPDATE at the bottom of this file once he joins.';
   end if;
 
-  -- Areas
-  insert into areas (household_id, name, sort_order, visibility) values
-    (v_household_id, 'Kitchen', 0, 'shared') returning id into v_kitchen_id;
-  insert into areas (household_id, name, sort_order, visibility) values
-    (v_household_id, 'Half Bath', 1, 'shared') returning id into v_half_bath_id;
-  insert into areas (household_id, name, sort_order, visibility) values
-    (v_household_id, 'Living Room', 2, 'shared') returning id into v_living_room_id;
-  insert into areas (household_id, name, sort_order, visibility) values
-    (v_household_id, 'Stairs', 3, 'shared') returning id into v_stairs_id;
-  insert into areas (household_id, name, sort_order, visibility) values
-    (v_household_id, 'Entryway', 4, 'shared') returning id into v_entryway_id;
-  insert into areas (household_id, name, sort_order, visibility, owner_id) values
-    (v_household_id, 'Caleb''s Room', 5, 'private', v_caleb_id) returning id into v_calebs_room_id;
-  insert into areas (household_id, name, sort_order, visibility, owner_id) values
-    (v_household_id, 'Caleb''s Bathroom', 6, 'private', v_caleb_id) returning id into v_calebs_bathroom_id;
+  -- Only "Home" needs creating -- the other 7 areas already exist
+  -- (ids hardcoded above).
   insert into areas (household_id, name, sort_order, visibility) values
     (v_household_id, 'Home', 7, 'shared') returning id into v_home_id;
 
