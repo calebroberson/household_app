@@ -418,7 +418,12 @@ class _MonthGrid extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             children: cells.map((day) {
               if (day == null) return const SizedBox.shrink();
-              final count = dayRows[day]?.length ?? 0;
+              final count = dayRows[day]
+                      ?.where((row) =>
+                          row['completed_at'] == null &&
+                          row['skipped'] != true)
+                      .length ??
+                  0;
               final isToday = day == today;
               final isSelected = day == selectedDay;
               return GestureDetector(
