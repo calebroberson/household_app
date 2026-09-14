@@ -6,8 +6,13 @@ import 'today_screen.dart';
 
 class MainTabScaffold extends StatelessWidget {
   final String householdId;
+  final VoidCallback onHouseholdChanged;
 
-  const MainTabScaffold({super.key, required this.householdId});
+  const MainTabScaffold({
+    super.key,
+    required this.householdId,
+    required this.onHouseholdChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +40,10 @@ class MainTabScaffold extends StatelessWidget {
           case 1:
             return ListsScreen(householdId: householdId);
           default:
-            return HomeScreen(householdId: householdId);
+            return HomeScreen(
+              householdId: householdId,
+              onHouseholdChanged: onHouseholdChanged,
+            );
         }
       },
     );

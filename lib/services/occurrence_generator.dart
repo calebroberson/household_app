@@ -6,6 +6,9 @@ class OccurrenceGenerator {
   static DateTime _dateOnly(DateTime dt) =>
       DateTime(dt.year, dt.month, dt.day);
 
+  static DateTime _startOfWeek(DateTime d) =>
+      d.subtract(Duration(days: d.weekday - 1));
+
   static String formatDate(DateTime dt) {
     final d = _dateOnly(dt);
     final month = d.month.toString().padLeft(2, '0');
@@ -34,6 +37,43 @@ class OccurrenceGenerator {
         }
       }
       return from;
+    }
+
+    if (type == 'every_n_weeks') {
+      final n = recurrenceRule['n'] as int;
+      final weekday = recurrenceRule['weekday'] as int;
+      final anchor = _dateOnly(DateTime.parse(recurrenceRule['anchor'] as String));
+      final anchorWeekStart = _startOfWeek(anchor);
+
+      for (var i = 0; i < n * 7; i++) {
+        final candidate = from.add(Duration(days: i));
+        if (candidate.weekday != weekday) continue;
+        final candidateWeekStart = _startOfWeek(candidate);
+        final weeksSinceAnchor =
+            candidateWeekStart.difference(anchorWeekStart).inDays ~/ 7;
+        if (weeksSinceAnchor % n == 0) {
+          return candidate;
+        }
+      }
+      return from;
+    }
+
+    if (type == 'monthly') {
+      final dayOfMonth = recurrenceRule['day_of_month'] as int;
+      var candidateMonth = DateTime(from.year, from.month, 1);
+
+      while (true) {
+        final daysInMonth =
+            DateTime(candidateMonth.year, candidateMonth.month + 1, 0).day;
+        final actualDay = dayOfMonth > daysInMonth ? daysInMonth : dayOfMonth;
+        final monthlyDate =
+            DateTime(candidateMonth.year, candidateMonth.month, actualDay);
+        if (!monthlyDate.isBefore(from)) {
+          return monthlyDate;
+        }
+        candidateMonth =
+            DateTime(candidateMonth.year, candidateMonth.month + 1, 1);
+      }
     }
 
     throw ArgumentError('Unsupported recurrence type: $type');

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/occurrence_generator.dart';
 import 'chore_form_screen.dart';
+import 'chore_list_screen.dart';
 
 class TodayScreen extends StatefulWidget {
   final String householdId;
@@ -17,6 +18,31 @@ class _TodayScreenState extends State<TodayScreen> {
   late Future<void> _readyFuture;
   Map<String, String> _choreTitles = {};
   Map<String, String> _memberNames = {};
+
+  static const _starterTemplates = [
+    {
+      'title': 'Take out trash',
+      'recurrence': {'type': 'daily'},
+    },
+    {
+      'title': 'Wash dishes',
+      'recurrence': {'type': 'daily'},
+    },
+    {
+      'title': 'Vacuum',
+      'recurrence': {
+        'type': 'weekly',
+        'days': [6]
+      },
+    },
+    {
+      'title': 'Laundry',
+      'recurrence': {
+        'type': 'weekly',
+        'days': [7]
+      },
+    },
+  ];
 
   @override
   void initState() {
@@ -72,6 +98,19 @@ class _TodayScreenState extends State<TodayScreen> {
     await OccurrenceGenerator.ensureOccurrencesForHousehold(widget.householdId);
   }
 
+  Future<void> _addStarterChore(Map<String, dynamic> template) async {
+    final userId = Supabase.instance.client.auth.currentUser!.id;
+    await Supabase.instance.client.from('chores').insert({
+      'household_id': widget.householdId,
+      'title': template['title'],
+      'recurrence_rule': template['recurrence'],
+      'assignment_strategy': 'anyone',
+      'created_by': userId,
+    });
+    await _loadLookups();
+    await _refreshOccurrences();
+  }
+
   Future<void> _complete(String occurrenceId) async {
     final userId = Supabase.instance.client.auth.currentUser!.id;
     await Supabase.instance.client.from('chore_occurrences').update({
@@ -81,31 +120,73 @@ class _TodayScreenState extends State<TodayScreen> {
     await _refreshOccurrences();
   }
 
-  Future<void> _confirmSkip(String occurrenceId, String choreTitle) async {
-    final confirmed = await showCupertinoDialog<bool>(
+  Future<void> _skip(String occurrenceId) async {
+    await Supabase.instance.client
+        .from('chore_occurrences')
+        .update({'skipped': true}).eq('id', occurrenceId);
+    await _refreshOccurrences();
+  }
+
+  Future<void> _reassign(String occurrenceId) async {
+    final result = await showCupertinoModalPopup<String>(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Skip today?'),
-        content: Text('Skip "$choreTitle" for today?'),
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Reassign to'),
         actions: [
-          CupertinoDialogAction(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.pop(context, false),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, ''),
+            child: const Text('Anyone'),
           ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Skip'),
-          ),
+          ..._memberNames.entries.map((entry) => CupertinoActionSheetAction(
+                onPressed: () => Navigator.pop(context, entry.key),
+                child: Text(entry.value),
+              )),
         ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
       ),
     );
 
-    if (confirmed == true) {
-      await Supabase.instance.client
-          .from('chore_occurrences')
-          .update({'skipped': true}).eq('id', occurrenceId);
-      await _refreshOccurrences();
+    if (result == null) return;
+
+    final newAssignee = result.isEmpty ? null : result;
+    await Supabase.instance.client
+        .from('chore_occurrences')
+        .update({'assigned_to': newAssignee}).eq('id', occurrenceId);
+    await _refreshOccurrences();
+  }
+
+  Future<void> _showActionsFor(String occurrenceId, String choreTitle) async {
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text(choreTitle),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, 'reassign'),
+            child: const Text('Reassign'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, 'skip'),
+            child: const Text('Skip Today'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+
+    if (action == 'reassign') {
+      await _reassign(occurrenceId);
+    } else if (action == 'skip') {
+      await _skip(occurrenceId);
     }
   }
 
@@ -113,15 +194,32 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () async {
+            await Navigator.of(context).push(
+              CupertinoPageRoute(
+                builder: (context) =>
+                    ChoreListScreen(householdId: widget.householdId),
+              ),
+            );
+            await _loadLookups();
+          },
+          child: const Icon(CupertinoIcons.list_bullet),
+        ),
         middle: const Text('Today'),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: () => Navigator.of(context).push(
-            CupertinoPageRoute(
-              builder: (context) =>
-                  ChoreFormScreen(householdId: widget.householdId),
-            ),
-          ),
+          onPressed: () async {
+            await Navigator.of(context).push(
+              CupertinoPageRoute(
+                builder: (context) =>
+                    ChoreFormScreen(householdId: widget.householdId),
+              ),
+            );
+            await _loadLookups();
+            await _refreshOccurrences();
+          },
           child: const Icon(CupertinoIcons.add),
         ),
       ),
@@ -156,6 +254,9 @@ class _TodayScreenState extends State<TodayScreen> {
                 }).toList();
 
                 if (visible.isEmpty) {
+                  if (_choreTitles.isEmpty) {
+                    return _buildOnboarding();
+                  }
                   return const Center(child: Text('Nothing due today.'));
                 }
 
@@ -186,7 +287,7 @@ class _TodayScreenState extends State<TodayScreen> {
                         final title = _choreTitles[choreId] ?? 'Chore';
                         return GestureDetector(
                           onLongPress: () =>
-                              _confirmSkip(occurrenceId, title),
+                              _showActionsFor(occurrenceId, title),
                           child: CupertinoListTile(
                             title: Text(title),
                             leading: const Icon(CupertinoIcons.circle),
@@ -200,6 +301,43 @@ class _TodayScreenState extends State<TodayScreen> {
               },
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOnboarding() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'No chores yet',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Add one of these to get started, or use the + button above.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: CupertinoColors.secondaryLabel),
+            ),
+            const SizedBox(height: 16),
+            ..._starterTemplates.map((template) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: CupertinoButton(
+                  color: CupertinoColors.systemGrey5,
+                  onPressed: () => _addStarterChore(template),
+                  child: Text(
+                    template['title'] as String,
+                    style: const TextStyle(color: CupertinoColors.label),
+                  ),
+                ),
+              );
+            }),
+          ],
         ),
       ),
     );

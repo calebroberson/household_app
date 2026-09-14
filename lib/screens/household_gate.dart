@@ -52,7 +52,10 @@ class _HouseholdGateState extends State<HouseholdGate> {
         if (householdId == null) {
           return CreateOrJoinHouseholdScreen(onSuccess: _refresh);
         }
-        return MainTabScaffold(householdId: householdId);
+        return MainTabScaffold(
+          householdId: householdId,
+          onHouseholdChanged: _refresh,
+        );
       },
     );
   }

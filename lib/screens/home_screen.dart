@@ -5,8 +5,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
   final String householdId;
+  final VoidCallback onHouseholdChanged;
 
-  const HomeScreen({super.key, required this.householdId});
+  const HomeScreen({
+    super.key,
+    required this.householdId,
+    required this.onHouseholdChanged,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -14,11 +19,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<String> _householdNameFuture;
+  late Future<List<Map<String, dynamic>>> _completionCountsFuture;
 
   @override
   void initState() {
     super.initState();
     _householdNameFuture = _fetchHouseholdName();
+    _completionCountsFuture = _fetchCompletionCounts();
   }
 
   Future<String> _fetchHouseholdName() async {
@@ -28,6 +35,51 @@ class _HomeScreenState extends State<HomeScreen> {
         .eq('id', widget.householdId)
         .single();
     return row['name'] as String;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCompletionCounts() async {
+    final memberRows = await Supabase.instance.client
+        .from('household_members')
+        .select('user_id')
+        .eq('household_id', widget.householdId)
+        .order('joined_at');
+
+    final userIds = memberRows.map((row) => row['user_id'] as String).toList();
+
+    final profileRows = userIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await Supabase.instance.client
+            .from('profiles')
+            .select('id, display_name')
+            .inFilter('id', userIds);
+
+    final namesById = {
+      for (final row in profileRows)
+        row['id'] as String: row['display_name'] as String?,
+    };
+
+    final thirtyDaysAgo =
+        DateTime.now().toUtc().subtract(const Duration(days: 30));
+    final completions = await Supabase.instance.client
+        .from('chore_occurrences')
+        .select('completed_by')
+        .eq('household_id', widget.householdId)
+        .gte('completed_at', thirtyDaysAgo.toIso8601String());
+
+    final counts = <String, int>{for (final userId in userIds) userId: 0};
+    for (final row in completions) {
+      final completedBy = row['completed_by'] as String?;
+      if (completedBy != null && counts.containsKey(completedBy)) {
+        counts[completedBy] = counts[completedBy]! + 1;
+      }
+    }
+
+    return userIds
+        .map((userId) => {
+              'name': namesById[userId] ?? 'Household member',
+              'count': counts[userId] ?? 0,
+            })
+        .toList();
   }
 
   String _generateInviteCode([int length = 6]) {
@@ -95,7 +147,53 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder: (context) => CupertinoAlertDialog(
           title: const Text('Error'),
-          content: const Text('Could not create an invite code. Please try again.'),
+          content:
+              const Text('Could not create an invite code. Please try again.'),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('OK'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _leaveHousehold() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Leave Household?'),
+        content: const Text(
+            'You will lose access to this household\'s chores and lists.'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await Supabase.instance.client.rpc('leave_household');
+      widget.onHouseholdChanged();
+    } catch (error) {
+      if (!mounted) return;
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Error'),
+          content:
+              const Text('Could not leave the household. Please try again.'),
           actions: [
             CupertinoDialogAction(
               child: const Text('OK'),
@@ -124,11 +222,51 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       child: SafeArea(
-        child: Center(
-          child: CupertinoButton.filled(
-            onPressed: _createInvite,
-            child: const Text('Invite Someone'),
-          ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            CupertinoButton.filled(
+              onPressed: _createInvite,
+              child: const Text('Invite Someone'),
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'Last 30 Days',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _completionCountsFuture,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CupertinoActivityIndicator());
+                }
+                final counts = snapshot.data!;
+                return CupertinoListSection.insetGrouped(
+                  children: counts.map((entry) {
+                    final count = entry['count'] as int;
+                    return CupertinoListTile(
+                      title: Text(entry['name'] as String),
+                      trailing: Text(
+                        '$count ${count == 1 ? 'chore' : 'chores'}',
+                        style: const TextStyle(
+                          color: CupertinoColors.secondaryLabel,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+            CupertinoButton(
+              onPressed: _leaveHousehold,
+              child: const Text(
+                'Leave Household',
+                style: TextStyle(color: CupertinoColors.destructiveRed),
+              ),
+            ),
+          ],
         ),
       ),
     );
