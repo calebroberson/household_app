@@ -41,7 +41,7 @@
 - Realtime: subscribe to list_items, lists, and chore_occurrences filtered by household_id
 - Any `timestamptz` value built client-side must be `DateTime.now().toUtc().toIso8601String()`, never without `.toUtc()` — a bare local-time ISO string gets interpreted by Postgres as UTC, silently skewing the stored value by the device's UTC offset.
 - Occurrence generation (creating the next `chore_occurrences` row, collapsing overdue ones) lives client-side in `lib/services/occurrence_generator.dart`, not a Postgres RPC — deliberate choice for easier iteration/debugging over eliminating a rare, harmless race condition. Revisit only if a server-side scheduled job (e.g. the deferred push digest) needs the same logic. Algorithm: at most one open (not completed, not skipped) occurrence per chore ever; a resolved occurrence's replacement is due on the next qualifying date *after today* (not after the old due date), so late completions never create a catch-up backlog.
-- Push notifications (APNs) and Sentry crash reporting deferred until core chores/lists loop works end-to-end
+- Push notifications (APNs) still deferred — needs its own Apple Developer/APNs setup session, plus a Supabase Edge Function for full in-app account deletion (also deferred, same infra dependency). Sentry crash reporting is live (`SentryFlutter.init` in `main.dart`); the DSN is not secret (same category as the Supabase URL/anon key) and is safe to have in the client.
 
 ## iOS testing workflow
 - Write code on Windows → test on Android emulator (hot reload)
