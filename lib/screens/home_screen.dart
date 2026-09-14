@@ -64,7 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
       'household_id': widget.householdId,
       'code': code,
       'created_by': userId,
-      'expires_at': now.add(const Duration(days: 7)).toIso8601String(),
+      'expires_at':
+          now.add(const Duration(days: 7)).toUtc().toIso8601String(),
       'max_uses': 10,
     });
     return code;

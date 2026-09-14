@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 import 'home_screen.dart';
 import 'lists_screen.dart';
+import 'today_screen.dart';
 
 class MainTabScaffold extends StatelessWidget {
   final String householdId;
@@ -14,20 +15,28 @@ class MainTabScaffold extends StatelessWidget {
       tabBar: CupertinoTabBar(
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.house_fill),
-            label: 'Home',
+            icon: Icon(CupertinoIcons.checkmark_circle),
+            label: 'Today',
           ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.list_bullet),
             label: 'Lists',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.house_fill),
+            label: 'Household',
+          ),
         ],
       ),
       tabBuilder: (context, index) {
-        if (index == 0) {
-          return HomeScreen(householdId: householdId);
+        switch (index) {
+          case 0:
+            return TodayScreen(householdId: householdId);
+          case 1:
+            return ListsScreen(householdId: householdId);
+          default:
+            return HomeScreen(householdId: householdId);
         }
-        return ListsScreen(householdId: householdId);
       },
     );
   }
