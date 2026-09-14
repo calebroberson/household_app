@@ -99,6 +99,8 @@ class _ChoreDetailScreenState extends State<ChoreDetailScreen> {
         return 'Every ${rule['n']} weeks on ${_dayLabels[rule['weekday']]}';
       case 'monthly':
         return 'Monthly on day ${rule['day_of_month']}';
+      case 'every_n_months':
+        return 'Every ${rule['n']} months on day ${rule['day_of_month']}';
       default:
         return '';
     }

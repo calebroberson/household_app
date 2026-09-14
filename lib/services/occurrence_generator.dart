@@ -76,6 +76,28 @@ class OccurrenceGenerator {
       }
     }
 
+    if (type == 'every_n_months') {
+      final n = recurrenceRule['n'] as int;
+      final dayOfMonth = recurrenceRule['day_of_month'] as int;
+      final anchor =
+          _dateOnly(DateTime.parse(recurrenceRule['anchor'] as String));
+      final anchorMonthIndex = anchor.year * 12 + (anchor.month - 1);
+
+      var candidateMonthIndex = from.year * 12 + (from.month - 1);
+      final offset = (candidateMonthIndex - anchorMonthIndex) % n;
+      candidateMonthIndex -= offset < 0 ? offset + n : offset;
+
+      while (true) {
+        final year = candidateMonthIndex ~/ 12;
+        final month = candidateMonthIndex % 12 + 1;
+        final daysInMonth = DateTime(year, month + 1, 0).day;
+        final actualDay = dayOfMonth > daysInMonth ? daysInMonth : dayOfMonth;
+        final candidate = DateTime(year, month, actualDay);
+        if (!candidate.isBefore(from)) return candidate;
+        candidateMonthIndex += n;
+      }
+    }
+
     throw ArgumentError('Unsupported recurrence type: $type');
   }
 
