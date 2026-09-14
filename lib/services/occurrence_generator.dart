@@ -83,7 +83,7 @@ class OccurrenceGenerator {
     final chores = await Supabase.instance.client
         .from('chores')
         .select(
-            'id, recurrence_rule, assignment_strategy, assignee_order, fixed_assignee')
+            'id, recurrence_rule, assignment_strategy, assignee_order, fixed_assignee, area_id')
         .eq('household_id', householdId)
         .eq('active', true);
 
@@ -108,10 +108,12 @@ class OccurrenceGenerator {
     final today = _dateOnly(DateTime.now());
     final recurrenceRule = chore['recurrence_rule'] as Map<String, dynamic>;
 
+    final areaId = chore['area_id'] as String?;
+
     if (recent.isEmpty) {
       final dueDate = computeNextDueDate(recurrenceRule, searchFrom: today);
       final assignedTo = _resolveAssignee(chore, previousAssignee: null);
-      await _insertOccurrence(householdId, choreId, dueDate, assignedTo);
+      await _insertOccurrence(householdId, choreId, dueDate, assignedTo, areaId);
       return;
     }
 
@@ -128,7 +130,7 @@ class OccurrenceGenerator {
     final previousAssignee = mostRecent['assigned_to'] as String?;
     final assignedTo =
         _resolveAssignee(chore, previousAssignee: previousAssignee);
-    await _insertOccurrence(householdId, choreId, dueDate, assignedTo);
+    await _insertOccurrence(householdId, choreId, dueDate, assignedTo, areaId);
   }
 
   static String? _resolveAssignee(
@@ -158,12 +160,14 @@ class OccurrenceGenerator {
     String choreId,
     DateTime dueDate,
     String? assignedTo,
+    String? areaId,
   ) async {
     await Supabase.instance.client.from('chore_occurrences').insert({
       'household_id': householdId,
       'chore_id': choreId,
       'due_date': formatDate(dueDate),
       'assigned_to': assignedTo,
+      'area_id': areaId,
     });
   }
 }
