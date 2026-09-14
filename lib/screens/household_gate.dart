@@ -48,6 +48,30 @@ class _HouseholdGateState extends State<HouseholdGate> {
           );
         }
 
+        if (snapshot.hasError) {
+          return CupertinoPageScaffold(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Could not load your household.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    CupertinoButton.filled(
+                      onPressed: _refresh,
+                      child: const Text('Try Again'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
         final householdId = snapshot.data;
         if (householdId == null) {
           return CreateOrJoinHouseholdScreen(onSuccess: _refresh);
