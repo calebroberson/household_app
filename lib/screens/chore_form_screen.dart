@@ -25,6 +25,9 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
   int _everyNWeeksWeekday = 1;
   String? _everyNWeeksAnchor;
   int _monthlyDayOfMonth = 1;
+  int _everyNMonthsN = 3;
+  int _everyNMonthsDayOfMonth = 1;
+  String? _everyNMonthsAnchor;
   String _assignmentStrategy = 'anyone';
   String? _fixedAssigneeId;
   String? _selectedAreaId;
@@ -70,6 +73,10 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
       _everyNWeeksAnchor = rule['anchor'] as String;
     } else if (_recurrenceType == 'monthly') {
       _monthlyDayOfMonth = rule['day_of_month'] as int;
+    } else if (_recurrenceType == 'every_n_months') {
+      _everyNMonthsN = rule['n'] as int;
+      _everyNMonthsDayOfMonth = rule['day_of_month'] as int;
+      _everyNMonthsAnchor = rule['anchor'] as String;
     }
 
     _assignmentStrategy = chore['assignment_strategy'] as String;
@@ -163,6 +170,15 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
         };
       case 'monthly':
         return {'type': 'monthly', 'day_of_month': _monthlyDayOfMonth};
+      case 'every_n_months':
+        final anchor =
+            _everyNMonthsAnchor ?? OccurrenceGenerator.formatDate(DateTime.now());
+        return {
+          'type': 'every_n_months',
+          'n': _everyNMonthsN,
+          'day_of_month': _everyNMonthsDayOfMonth,
+          'anchor': anchor,
+        };
       default:
         throw StateError('Unknown recurrence type: $_recurrenceType');
     }
@@ -282,6 +298,10 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
                         padding: EdgeInsets.symmetric(horizontal: 6),
                         child: Text('Monthly'),
                       ),
+                      'every_n_months': Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 6),
+                        child: Text('Every N Mo'),
+                      ),
                     },
                     onValueChanged: (value) {
                       if (value != null) {
@@ -354,6 +374,55 @@ class _ChoreFormScreenState extends State<ChoreFormScreen> {
                           padding: EdgeInsets.zero,
                           onPressed: () => setState(() {
                             if (_monthlyDayOfMonth < 31) _monthlyDayOfMonth++;
+                          }),
+                          child: const Icon(CupertinoIcons.plus_circle),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_recurrenceType == 'every_n_months') ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Text('Every'),
+                        const SizedBox(width: 8),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () => setState(() {
+                            if (_everyNMonthsN > 1) _everyNMonthsN--;
+                          }),
+                          child: const Icon(CupertinoIcons.minus_circle),
+                        ),
+                        Text('$_everyNMonthsN'),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () =>
+                              setState(() => _everyNMonthsN++),
+                          child: const Icon(CupertinoIcons.plus_circle),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('months on day:'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () => setState(() {
+                            if (_everyNMonthsDayOfMonth > 1) {
+                              _everyNMonthsDayOfMonth--;
+                            }
+                          }),
+                          child: const Icon(CupertinoIcons.minus_circle),
+                        ),
+                        Text('$_everyNMonthsDayOfMonth'),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () => setState(() {
+                            if (_everyNMonthsDayOfMonth < 31) {
+                              _everyNMonthsDayOfMonth++;
+                            }
                           }),
                           child: const Icon(CupertinoIcons.plus_circle),
                         ),
