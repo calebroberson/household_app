@@ -13,7 +13,9 @@ class ChoreListScreen extends StatefulWidget {
 }
 
 class _ChoreListScreenState extends State<ChoreListScreen> {
-  late Future<List<Map<String, dynamic>>> _choresFuture;
+  late Future<void> _loadFuture;
+  List<Map<String, dynamic>> _chores = [];
+  Map<String, Map<String, dynamic>> _areasById = {};
 
   static const _dayLabels = {
     1: 'Mon',
@@ -28,21 +30,34 @@ class _ChoreListScreenState extends State<ChoreListScreen> {
   @override
   void initState() {
     super.initState();
-    _choresFuture = _fetchChores();
+    _loadFuture = _loadAll();
   }
 
-  Future<List<Map<String, dynamic>>> _fetchChores() async {
-    return await Supabase.instance.client
+  Future<void> _loadAll() async {
+    final chores = await Supabase.instance.client
         .from('chores')
-        .select('id, title, recurrence_rule')
+        .select('id, title, recurrence_rule, area_id')
         .eq('household_id', widget.householdId)
         .eq('active', true)
         .order('title');
+
+    final areaRows = await Supabase.instance.client
+        .from('areas')
+        .select('id, name, sort_order, visibility')
+        .eq('household_id', widget.householdId);
+
+    if (!mounted) return;
+    setState(() {
+      _chores = chores;
+      _areasById = {
+        for (final row in areaRows) row['id'] as String: row,
+      };
+    });
   }
 
   void _refresh() {
     setState(() {
-      _choresFuture = _fetchChores();
+      _loadFuture = _loadAll();
     });
   }
 
@@ -67,39 +82,71 @@ class _ChoreListScreenState extends State<ChoreListScreen> {
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(middle: Text('Chores')),
       child: SafeArea(
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _choresFuture,
+        child: FutureBuilder<void>(
+          future: _loadFuture,
           builder: (context, snapshot) {
-            if (!snapshot.hasData) {
+            if (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CupertinoActivityIndicator());
             }
-            final chores = snapshot.data!;
-            if (chores.isEmpty) {
+            if (_chores.isEmpty) {
               return const Center(child: Text('No chores yet.'));
             }
-            return ListView.builder(
-              itemCount: chores.length,
-              itemBuilder: (context, index) {
-                final chore = chores[index];
-                final rule =
-                    chore['recurrence_rule'] as Map<String, dynamic>;
-                return CupertinoListTile(
-                  title: Text(chore['title'] as String),
-                  subtitle: Text(_recurrenceSummary(rule)),
-                  trailing: const Icon(CupertinoIcons.chevron_forward),
-                  onTap: () async {
-                    await Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (context) => ChoreDetailScreen(
-                          householdId: widget.householdId,
-                          choreId: chore['id'] as String,
-                        ),
-                      ),
+
+            final byArea = <String?, List<Map<String, dynamic>>>{};
+            for (final chore in _chores) {
+              final areaId = chore['area_id'] as String?;
+              byArea.putIfAbsent(areaId, () => []).add(chore);
+            }
+
+            final areaKeys = byArea.keys.toList()
+              ..sort((a, b) {
+                if (a == null) return 1;
+                if (b == null) return -1;
+                final aOrder = _areasById[a]?['sort_order'] as int? ?? 0;
+                final bOrder = _areasById[b]?['sort_order'] as int? ?? 0;
+                return aOrder.compareTo(bOrder);
+              });
+
+            return ListView(
+              children: areaKeys.map((areaKey) {
+                final area = areaKey == null ? null : _areasById[areaKey];
+                final areaName = area?['name'] as String? ?? 'General';
+                final isPrivate = area?['visibility'] == 'private';
+                final chores = byArea[areaKey]!;
+
+                return CupertinoListSection.insetGrouped(
+                  header: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(areaName),
+                      if (isPrivate) ...[
+                        const SizedBox(width: 4),
+                        const Icon(CupertinoIcons.lock_fill, size: 12),
+                      ],
+                    ],
+                  ),
+                  children: chores.map((chore) {
+                    final rule =
+                        chore['recurrence_rule'] as Map<String, dynamic>;
+                    return CupertinoListTile(
+                      title: Text(chore['title'] as String),
+                      subtitle: Text(_recurrenceSummary(rule)),
+                      trailing: const Icon(CupertinoIcons.chevron_forward),
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (context) => ChoreDetailScreen(
+                              householdId: widget.householdId,
+                              choreId: chore['id'] as String,
+                            ),
+                          ),
+                        );
+                        _refresh();
+                      },
                     );
-                    _refresh();
-                  },
+                  }).toList(),
                 );
-              },
+              }).toList(),
             );
           },
         ),
